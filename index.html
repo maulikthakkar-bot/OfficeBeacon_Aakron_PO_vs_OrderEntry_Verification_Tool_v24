@@ -947,6 +947,9 @@ function parsePO_Q(text){
   o.resale=/mark\s*this\s*sale\s*as\s*resale|do\s*not\s*charge\s*or\s*invoice\s*for\s*tax/i.test(F);
   o.artwork=o.artNote?('Art sent via e-mail'+(o.artNote&&!/via\s*email/i.test(o.artNote)?': '+o.artNote:'')):'';
   o.total=money(fm(F,/Estimated\s*Order\s*Grand\s*Total\s*\$\s*([\d,]+\.\d{2})/i));o.subtotal=o.total;
+  {const ref=fm(F,/Re-?order\s+of\s+(?:PO|P\.O\.)\s*#?\s*([A-Z0-9-]{5,})/i)||fm(F,/(?:repeat|re-?order)\s*(?:order)?\s*(?:of)?\s*(?:our\s*)?(?:previous\s*)?(?:PO|P\.O\.)\s*#?\s*:?\s*([A-Z0-9-]{5,})/i);
+   const flag=/\bREORDER\b\s+\d+\s+It\s+is\s+the\s+Factory/i.test(F)||/Not\s+Identical\s+to\s+the\s+Previous\s+Order/i.test(F);
+   o.repeat=ref||(flag?'(reorder – previous PO # not stated)':'');}
   o.asi='';o.date='';
   return o;
 }
@@ -1082,6 +1085,8 @@ function parseOE(text){
   o.sides=sidesOf(o.imprintLoc);
   o.emailedArt=/☑\s*Emailed\s*Art/i.test(F)||/Emailed\s*Art/i.test(F);
   o.repeatOrder=fm(F,/Repeat\s*#\s*(\d+)/i);
+  {const pi=F.search(/Virtual\s*Pouch/i),pe=F.search(/Ordered\s*By\s*:/i),seg=pi>=0?F.slice(pi,pe>pi?pe:pi+400):'';
+   o.repeatShip=fm(seg,/Ship\s*Date\s*:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);o.repeatSite=fm(seg,/\bSite\s*:\s*([A-Za-z]{1,12})/i);}
   const ni=F.search(/Comments\/Notes|Customer\s*Specific\s*Notes/i);let nt=ni>=0?F.slice(ni):F;const cut=nt.search(/Order\s*Number:\s*\d+\s*Date\/Time/i);if(cut>0)nt=nt.slice(0,cut);o.notes=nt;
   o.printerNotes=fm(F,/Instructions\s*to\s*Printer\s*:?\s*(.+?)(?=\s*Customer\s*Specific|\s*Order\s*Number:\s*\d+\s*Date\/Time|$)/i);o.typesetting=/☑\s*Typesetting/i.test(F);
   o.hasTracking=/Order\s*Tracking\s*Notes/i.test(F);o.files=[...F.matchAll(/files are\s*:\s*([\w .#-]+?\.(?:pdf|eps|ai|png|jpe?g|cdr|svg|zip|psd))/gi)].map(m=>m[1].trim());
@@ -1116,7 +1121,7 @@ function analyze(poText,oeText,customers,altText){
     if(!a&&!b)return add(sec,label,'Not detected','Not detected','miss');
     if(!a||!b)return add(sec,label,a?d(a):'Not detected',b?d(b):'Not detected',a?'miss':'review',(a?'Missing on Order Entry':'Missing on PO – confirm'));
     add(sec,label,d(a),d(b),norm(a)===norm(b)?'match':'bad',norm(a)===norm(b)?'':(note||'Values differ'));};
-  const S1='1. Order & customer',S2='2. Items & pricing',S3='3. Shipping',S4='4. Product, imprint & artwork',S5='5. PO special instructions → Order Entry';
+  const S1='1. Order & customer',S2='2. Items & pricing',SA='3. Add-ons',S3='4. Shipping',S4='5. Product, imprint & artwork',S5='6. PO special instructions → Order Entry';
   const fmtU=x=>x?(x.unitRaw||x.unit):'';
   const itemLine=x=>x?(x.noPrice?`${x.qty} (no price on PO)`:`${x.qty} × $${fmtU(x)} = $${x.ext}`):'';
   // plant / site: the Site on the Order Entry packing slip must be the plant that makes the item (plant list) – shown inside the item row
@@ -1203,8 +1208,8 @@ function analyze(poText,oeText,customers,altText){
   const poCh=(P.charges||[]).filter(c=>Number(c.ext)>0),oeAdd=(O.addonRows||[]).filter(a=>Number(a.value)>0),usedA=new Set(),isSet=x=>/set[\s-]?up/i.test(x);
   const cat=x=>/set[\s-]?up/i.test(x)?'setup':/rush/i.test(x)?'rush':/proof/i.test(x)?'proof':'other';
   poCh.forEach(c=>{const cc=cat(c.desc),free=x=>!usedA.has(x);const a=oeAdd.find(x=>free(x)&&x.value===c.ext&&cat(x.desc)===cc)||(cc!=='other'?oeAdd.find(x=>free(x)&&cat(x.desc)===cc):null)||oeAdd.find(x=>free(x)&&x.value===c.ext&&(cc==='other'||cat(x.desc)==='other'))||(cc==='other'?oeAdd.find(x=>free(x)&&cat(x.desc)==='other'):null);if(a)usedA.add(a);
-    add(S2,(isSet(c.desc)?'Set-up charge':'Extra charge')+' – '+c.desc.slice(0,50),itemLine(c),a?`${a.ordered} × $${a.price} = $${a.value} (${a.desc.slice(0,38)})`:'No matching OE add-on',a?(a.value===c.ext?'match':'bad'):'bad',a?(a.value===c.ext?'':'Charge amount differs'):'Charge on PO is not on OE');});
-  oeAdd.filter(a=>!usedA.has(a)).forEach(a=>add(S2,'OE add-on not on PO','Not on PO',`$${a.value} – ${a.desc.slice(0,50)}`,'bad','Charge on OE has no matching PO line'));
+    add(SA,(isSet(c.desc)?'Set-up charge':'Extra charge')+' – '+c.desc.slice(0,50),itemLine(c),a?`${a.ordered} × $${a.price} = $${a.value} (${a.desc.slice(0,38)})`:'No matching OE add-on',a?(a.value===c.ext?'match':'bad'):'bad',a?(a.value===c.ext?'':'Charge amount differs'):'Charge on PO is not on OE');});
+  oeAdd.filter(a=>!usedA.has(a)).forEach(a=>add(SA,'OE add-on not on PO','Not on PO',`$${a.value} – ${a.desc.slice(0,50)}`,'bad','Charge on OE has no matching PO line'));
   // customer set-up price list: checked only when the customer AND every item on the order are on the list (customer on list but item not on list = no check, no row)
   {const num=x=>Number(String(x||'').replace(/[$,]/g,''))||0,isSetC=x=>/set[\s-]?up/i.test(x||''),f2=n=>'$'+Number(n).toFixed(2);
    const hits=[],seenI=new Set();let allOn=(O.items||[]).length>0;
@@ -1220,13 +1225,13 @@ function analyze(poText,oeText,customers,altText){
        return{st:'bad',n:(isPO?'PO':'Order Entry')+' set-up '+f2(v)+' differs from the price list '+f2(L)}};
      const jp=judge(poSet,poHas,true),jo=judge(oeSet,true,false),st=(jp.st==='bad'||jo.st==='bad')?'bad':(jp.st==='review'||jo.st==='review')?'review':'match';
      const lab=hits[0].cust+' · item'+(hits.length>1?'s ':' ')+hits.map(h=>h.item).join(', ');
-     add(S2,'Set-up charge vs customer price list ('+lab+')','PO '+f2(poSet)+' (list '+f2(L)+')','OE '+f2(oeSet)+' (list '+f2(L)+')',st,[jp.n,jo.n].filter(Boolean).join('; '));
+     add(SA,'Set-up charge vs customer price list ('+lab+')','PO '+f2(poSet)+' (list '+f2(L)+')','OE '+f2(oeSet)+' (list '+f2(L)+')',st,[jp.n,jo.n].filter(Boolean).join('; '));
      // price-list dates: the Order Entry received date should be inside the list's current-year (or next-year) window
      const dn=d=>{const m=String(d||'').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);return m?+(m[3]+m[1]+m[2]):0},od=dn(dateN(O.date));
      if(od){const bad=hits.filter(h=>{const in1=dn(h.start)&&od>=dn(h.start)&&(!dn(h.end)||od<=dn(h.end)),in2=dn(h.ns)&&od>=dn(h.ns)&&(!dn(h.ne)||od<=dn(h.ne));return !(in1||in2)});
-       if(bad.length){const h=bad[0];add(S2,'Price-list dates ('+h.cust+' · item '+h.item+')','Order received '+dateN(O.date),'List valid '+(h.start||'?')+' – '+(h.end||'?')+(h.ns?' · next '+h.ns+' – '+(h.ne||'?'):''),'review','The order date is outside the price list dates – confirm the list price still applies')}}
+       if(bad.length){const h=bad[0];add(SA,'Price-list dates ('+h.cust+' · item '+h.item+')','Order received '+dateN(O.date),'List valid '+(h.start||'?')+' – '+(h.end||'?')+(h.ns?' · next '+h.ns+' – '+(h.ne||'?'):''),'review','The order date is outside the price list dates – confirm the list price still applies')}}
    }}
-  if(P.setupWaived&&!oeAdd.some(a=>isSet(a.desc)))add(S2,'Set-up charge','Waived on PO','No set-up charge on OE','match');
+  if(P.setupWaived&&!oeAdd.some(a=>isSet(a.desc)))add(SA,'Set-up charge','Waived on PO','No set-up charge on OE','match');
   const sumP=P.items.concat(P.options,P.charges||[]).reduce((s,x)=>s+Number(x.ext||0),0),sumO=O.items.reduce((s,x)=>s+Number(x.ext||0),0);
   if(P.subtotal)add(S2,'PO line total vs PO total','$'+sumP.toFixed(2),'$'+P.subtotal,Math.abs(sumP-Number(P.subtotal))<0.005?'match':'review',Math.abs(sumP-Number(P.subtotal))<0.005?'':'PO lines do not add to the PO total');
   if(O.itemAmount)add(S2,'OE line total vs OE Item Amount','$'+sumO.toFixed(2),'$'+O.itemAmount,Math.abs(sumO-Number(O.itemAmount))<0.005?'match':'review');
@@ -1283,7 +1288,15 @@ function analyze(poText,oeText,customers,altText){
   if(P.stockCode){const sc=String(P.stockCode).replace(/[^A-Za-z0-9-]/g,''),hit=new RegExp('stock\\s*(?:art\\s*)?(?:design\\s*)?(?:code\\s*)?#?:?\\s*'+sc+'(?![A-Za-z0-9])','i').test(oeText),tick=/Stock\s*Art/i.test(oeText);
     add(S4,'Stock art design code','Stock Art Design Code '+P.stockCode,hit?'Found on OE (notes)':(tick?'"Stock Art" ticked, code not found':'Not found on OE'),hit&&tick?'match':hit||tick?'review':'bad',hit&&tick?'':hit?'Code is in the OE notes but "Stock Art" is not ticked':tick?'"Stock Art" is ticked but the design code '+P.stockCode+' is not in the OE notes':'Stock design code is missing on the OE');}
   if(P.method)add(S4,'Imprint method',P.method,'Not shown on OE','review','Method is not on the OE – confirm production method');
-  if(!P.repeat&&O.repeatOrder&&P.priorRef){add(S4,'Repeat order reference','PO refers to earlier order #'+P.priorRef+' (art / imprint colour)','Repeat order #'+O.repeatOrder,'review','PO points to an earlier order, OE is marked as a repeat of #'+O.repeatOrder+' – confirm they are the same job');}
+  if(P.repeat){
+    const dd=d=>{const m=String(d||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?+(m[3]+m[1].padStart(2,'0')+m[2].padStart(2,'0')):0};
+    const miss=[];if(!O.repeatOrder)miss.push('Repeat #');if(!O.repeatShip)miss.push('Ship Date of the repeat');if(!O.repeatSite)miss.push('Site of the repeat');
+    const poTxt=/^\(/.test(P.repeat)?'Reorder – previous PO # not stated':'Reorder of PO# '+P.repeat,
+      oeTxt=[O.repeatOrder?'Repeat #'+O.repeatOrder:'Repeat # – blank',O.repeatShip?'Ship Date '+O.repeatShip:'Ship Date – blank',O.repeatSite?'Site '+O.repeatSite:'Site – blank'].join(' · ');
+    let st=miss.length?'bad':'match',note=miss.length?'The PO is a reorder, but the Virtual Pouch is missing: '+miss.join(', ')+' – something is wrong':'';
+    if(!miss.length&&dd(O.date)&&dd(O.repeatShip)>=dd(O.date)){st='review';note='The repeat ship date is not before this order\'s date – confirm it is the earlier order'}
+    add(S4,'Repeat / reorder – Virtual Pouch',poTxt,oeTxt,st,note);}
+  else if(!P.repeat&&O.repeatOrder&&P.priorRef){add(S4,'Repeat order reference','PO refers to earlier order #'+P.priorRef+' (art / imprint colour)','Repeat order #'+O.repeatOrder,'review','PO points to an earlier order, OE is marked as a repeat of #'+O.repeatOrder+' – confirm they are the same job');}
   else if(P.repeat||O.repeatOrder){add(S4,'Repeat order reference',P.repeat?'Previous PO '+P.repeat:'Not a repeat',O.repeatOrder?'Repeat order #'+O.repeatOrder:'Not marked as repeat',P.repeat&&O.repeatOrder?'review':'bad',P.repeat&&O.repeatOrder?'PO quotes the customer PO; OE quotes our order #. Confirm order '+O.repeatOrder+' was PO '+P.repeat:'Repeat flag missing on one side');}
   if(P.artwork){const inOE=nz(oeText).includes(nz(P.artwork));
     const isFile=/\.\w{2,4}$/.test(P.artwork);

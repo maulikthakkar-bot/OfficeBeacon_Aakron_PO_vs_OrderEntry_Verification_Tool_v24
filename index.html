@@ -319,8 +319,8 @@ function btKeyHit(low,k){
 const BILL_TOS=[
  {label:'AnyPromo',layout:'AnyPromo PO',name:'AnyPromo',keys:['anypromo','any promo'],custNo:'117065-0',company:'ANYPROMO CORP',street:'1511 E HOLT BLVD',city:'ONTARIO',state:'CA',zip:'91761',phone:'(909) 628-9955',poIsBillTo:false},
  {label:'4AllPromos',layout:'4AllPromos PO',name:'4AllPromos',keys:['4allpromos','4 all promos','4allpromo'],custNo:'196920-0',company:'4 ALL PROMOS / K-READ',street:'20 RESEARCH PARKWAY SUITE A',city:'OLD SAYBROOK',state:'CT',zip:'06475',phone:'8607679951',poIsBillTo:false},
+ {label:'Geiger Corporate Program – acct 202900-1 (Lewiston, ME)',layout:'Geiger PO',name:'Geiger Corporate Program',keys:['geiger'],mustHave:['202900','corporate programs'],custNo:'202900-1',company:'GEIGER CORPORATE PROGRAM',street:'MT. HOPE AVENUE PO BOX 1609',city:'LEWISTON',state:'ME',zip:'04240',phone:'2077552000',poIsBillTo:false},
  {label:'Geiger – acct 202900 (Lewiston, ME)',layout:'Geiger PO',name:'Geiger',keys:['geiger'],mustHave:['202900'],custNo:'202900-0',company:'GEIGER',street:'MT. HOPE AVENUE P O BOX 1609',city:'LEWISTON',state:'ME',zip:'04240',phone:'2077552000',poIsBillTo:false},
- {label:'Geiger',layout:'Geiger PO',name:'Geiger',keys:['geiger'],custNo:'',poIsBillTo:true},
  {label:'Quality Logo Products',layout:'Quality Logo Products PO',name:'Quality Logo Products',keys:['quality logo products','quality logo'],custNo:'302967-0',company:'QUALITY LOGO PRODUCTS, INC',street:'724 NORTH HIGHLAND AVE.',city:'AURORA',state:'IL',zip:'60506',phone:'8663125646',poIsBillTo:false},
   {label:'Kaeser & Blair',layout:'Kaeser & Blair PO',name:'Kaeser & Blair',keys:['k&b order number','kaeser & blair','kaeser and blair','kaeser&blair','kaeser blair'],custNo:'238600-0',company:'KAESER & BLAIR INC',street:'4236 GRISSOM DRIVE',city:'BATAVIA',state:'OH',zip:'45103',phone:'5137351110',poIsBillTo:true},
   {label:'CUSTOMINK',layout:'CustomInk job worksheet',name:'CustomInk',keys:['customink','custom ink'],custNo:'173408-0',company:'CUSTOMINK.COM',street:'1640 BORO PLACE SUITE 301',city:'TYSONS',state:'VA',zip:'22102',phone:'7035444366',poIsBillTo:false},
@@ -966,10 +966,11 @@ function parsePO_E(text){
   const L=T.split('\n').map(x=>x.trim()).filter(Boolean);
   const viaLine=L.find(l=>/^(?:UPS|FedEx|FEDEX|Fed\s*Ex|USPS|DHL)\b.*(?:Ground|Air|Day|Express|Priority|Overnight|Freight|Mail)/i.test(l));
   o.via=viaLine?viaLine.replace(/\s*-\s*/,' ').trim():'';
-  o.account=fm(F,/3RD\s*PARTY\s*#\s*((?=[A-Z0-9]*\d)[A-Z0-9]{4,})/i);
+  o.account=fm(F,/3RD\s*PARTY\s*#\s*((?=[A-Z0-9]*\d)[A-Z0-9]{4,})/i)||fm(F,/USING\s*ACCT\s*#?\s*([0-9][0-9 -]{4,}[0-9])/i);
+  o.hand=fm(F,/MUST\s*HAVE\s*IN\s*HANDS?\s*BY\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i)||fm(F,/arrive[^!]{0,70}for\s*use\s*on\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
   // header block: ship-to = the lines left after removing supplier / bill-to / label lines
   {const he=L.findIndex(l=>/^Item\s*#\s*\/\s*Description/i.test(l)||/Ord\s+Required/i.test(l));let H=L.slice(0,he>0?he:40);{const t=[];for(let i=0;i<H.length;i++){if(/^ORIGIN\b/i.test(H[i])){if(H[i+1]&&!/\d/.test(H[i+1]))i++;continue}t.push(H[i])}H=t}
-   const EXC=/AAKRON|GEIGER|INDIANOLA|AKRON\s*NY|C\/O\s*CORPORATE|PO\s*BOX\s*\d+|P\.O\.\s*Box|Mt\.\s*Hope|Lewiston|^PURCHASE ORDER|^SHIP TO|^BILL TO|^SUPPLIER|ACKNOWLEDG|^PROOFS|^FOLLOW|^TERMS|RETURN ADDRESS|ORIGIN|^WINONA|3RD PARTY|SHIP VIA|OUR REFERENCE|Sales Partner|^Phone|^Fax|^Email|^\d{4,}$|^Net \d+|^(?:UPS|FedEx|FEDEX|USPS|DHL)\b|FOB|^DS$|Page \d|BROADWAY|FULLER\s*ROAD|ALBANY,\s*NY\s*12205|@|^\d{3}[.\-]\d{3}[.\-]\d{4}$|^DATE\b/i;
+   const EXC=/^PH\s*:|AAKRON|GEIGER|INDIANOLA|AKRON\s*NY|C\/O\s*CORPORATE|PO\s*BOX\s*\d+|P\.O\.\s*Box|Mt\.\s*Hope|Lewiston|^PURCHASE ORDER|^SHIP TO|^BILL TO|^SUPPLIER|ACKNOWLEDG|^PROOFS|^FOLLOW|^TERMS|RETURN ADDRESS|ORIGIN|^WINONA|3RD PARTY|SHIP VIA|OUR REFERENCE|Sales Partner|^Phone|^Fax|^Email|^\d{4,}$|^Net \d+|^(?:UPS|FedEx|FEDEX|USPS|DHL)\b|FOB|^DS$|Page \d|BROADWAY|FULLER\s*ROAD|ALBANY,\s*NY\s*12205|@|^\d{3}[.\-]\d{3}[.\-]\d{4}$|^DATE\b/i;
    const S=H.filter(l=>!EXC.test(l));o.stBlock=S.join(' ');
    const CSZ=/^(.+?),?\s+([A-Z]{2})\s+(\d{5})(?:-\d{4})?$/,CTRY=/^(?:USA\b|UNITED\s*STATES|U\.?S\.?A?\b)/i;let k=S.findIndex((l,i)=>CSZ.test(l)&&CTRY.test(S[i+1]||''));if(k<0)k=S.findIndex(l=>CSZ.test(l));
    if(k>=2){const pre=S.slice(0,k),cz=S[k].match(CSZ),si=pre.findIndex(l=>/^(?:\d|P\.?O\.?\s*Box)/i.test(l));let head,streetL;
@@ -987,7 +988,7 @@ function parsePO_E(text){
   o.total=money(fm(F,/Total\s*Amount\s*:\s*([\d,]+\.\d{2})/i));o.subtotal=o.total;
   // specifications
   const pc=fm(F,/PRODUCT\s*COLOR\s*:\s*([A-Z][A-Z \/-]*?)\s*\(\d+\)/)||fm(F,/PRODUCT\s*COLOR\s*:\s*([A-Z][A-Z \/-]*?)(?=\s*\*|\s*$)/);if(pc){o.colors.push(pc);o.color=pc}
-  {const i=L.findIndex(l=>/\d+\s*COLOR\s*IMPRINT/i.test(l));if(i>=0){const nx=L.slice(i+1).find(l=>!/^\*/.test(l));if(nx&&!/WADE|LOGO/i.test(nx)&&!/\*/.test(nx)){o.ink=nx;o.inks.push({color:nx,kind:'Run'})}
+  {const i=L.findIndex(l=>/(?:\d+|ONE|TWO|THREE|FOUR|FIVE)\s*COLOR\s*IMPRINT/i.test(l));if(i>=0){const nx=L.slice(i+1).find(l=>!/^\*/.test(l));if(nx&&!/WADE|LOGO/i.test(nx)&&!/\*/.test(nx)){o.ink=nx;o.inks.push({color:nx,kind:'Run'})}
      else if(nx){const m=nx.match(/^([A-Z0-9 \/#.-]+?)\s*\*{3}/);if(m){o.ink=m[1].trim();o.inks.push({color:o.ink,kind:'Run'})}}}}
   o.typeset=fm(F,/((?:SET\s*TYPE|TYPE\s*SET|TYPESET)[^*]{0,80}?)(?=\s*\*{3}|\s*$)/i);o.typesetWord=fm(F,/UNDERNEATH\s+(\S+)/i);
   o.artwork=fm(F,/ACCESS\s*ART\s*FILE\s*\*+\s*(\S+)/i);
@@ -1146,6 +1147,7 @@ function analyze(poText,oeText,customers,altText){
     add(S1,'Bill-to address'+tag,b.street+', '+b.city+', '+b.state+' '+b.zip,O.obStreet?O.obStreet+', '+O.obCsz:'Not detected',same?'match':'bad',same?'':'Order Entry “Ordered By” address differs from the saved bill-to');
     if(O.obPhone){const ph=digits(O.obPhone).slice(-10)===digits(b.phone).slice(-10);add(S1,'Bill-to phone'+tag,b.phone,O.obPhone,ph?'match':'review',ph?'':'Phone differs from the saved bill-to – confirm');}}
   if(P.asi)cmp(S1,'Customer number (ASI# vs Customer No.)',P.asi,String(O.custNo||'').replace(/-.*/,''),digits);
+  if(P.billTo&&P.billTo.mustHave&&P.billTo.custNo&&P.asi){const ok=nz(P.billTo.custNo)===nz(O.custNo);add(S1,'Bill-to customer no. ('+P.billTo.name+' – saved account)',P.billTo.custNo,O.custNo||'Not detected',ok?'match':'bad',ok?'':'Order Entry customer no. differs from the account this PO is for');}
   const poBT=!P.billTo||P.billTo.poIsBillTo;
   if(P.vendor&&O.obCompany&&poBT){const cw=x=>String(x).toLowerCase().replace(/c\/o/g,' ').replace(/[^a-z0-9 ]+/g,' ').split(/\s+/).filter(w=>w&&!/^(inc|corp|corporation|llc|co|company|ltd|the|of)$/.test(w)).map(w=>w.length>3&&w.endsWith('s')?w.slice(0,-1):w).join(' '),a=cw(P.vendor),b=cw(O.obCompany),eq=a===b,part=nz(P.vendor).includes(nz(O.obCompany))||nz(O.obCompany).includes(nz(P.vendor))||nz(P.vendor.split(' ')[0])===nz(O.obCompany.split(' ')[0]);
     add(S1,'Ordered-by company',P.vendor,O.obCompany,eq?'match':part?'review':'bad',eq?'':part?'Names differ slightly (suffix / extra text) – confirm same account':'Company differs');}
